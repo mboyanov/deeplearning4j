@@ -30,5 +30,14 @@ public class MartyMain {
         
         INDArray[] out = inf.output(new INDArray[] { Nd4j.ones(10,1, 3)}, new INDArray[]{null});
         System.out.println(out[0]);
+        INDArray mask = Nd4j.zeros(10,3);
+        for (int i =0; i<10 ; i++) {
+            for (int j = 1; j<3; j++ ) {
+                mask.putScalar(i, j, 1);
+            }
+        }
+        out = inf.output(new INDArray[] { Nd4j.ones(10,1, 3)}, new INDArray[]{mask});
+       
+        System.out.println(out[0]);
     }
 }
