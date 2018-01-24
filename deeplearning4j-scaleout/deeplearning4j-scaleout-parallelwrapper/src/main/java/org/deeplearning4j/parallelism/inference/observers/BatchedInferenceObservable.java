@@ -19,7 +19,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  */
 @Slf4j
 public class BatchedInferenceObservable extends BasicInferenceObservable implements InferenceObservable {
-    private List<INDArray[]> inputs = new ArrayList<>();
+    private List<Batch> inputs = new ArrayList<>();
     private List<INDArray[]> outputs = new ArrayList<>();
     private AtomicInteger counter = new AtomicInteger(0);
     private ThreadLocal<Integer> position = new ThreadLocal<>();
@@ -37,7 +37,18 @@ public class BatchedInferenceObservable extends BasicInferenceObservable impleme
     @Override
     public void setInput(INDArray... input) {
         synchronized (locker) {
-            inputs.add(input);
+            inputs.add(new Batch(input, null));
+            position.set(counter.getAndIncrement());
+
+            if (isReadLocked.get())
+                realLocker.readLock().unlock();
+        }
+    }
+    
+    @Override
+    public void setInput(INDArray[] input, INDArray[] masks) {
+        synchronized (locker) {
+            inputs.add(new Batch(input, masks));
             position.set(counter.getAndIncrement());
 
             if (isReadLocked.get())
@@ -46,23 +57,31 @@ public class BatchedInferenceObservable extends BasicInferenceObservable impleme
     }
 
     @Override
-    public INDArray[] getInput() {
+    public Batch getInput() {
         realLocker.writeLock().lock();
         isLocked.set(true);
 
         // this method should pile individual examples into single batch
         if (counter.get() > 1) {
-            INDArray[] result = new INDArray[inputs.get(0).length];
+            INDArray[] result = new INDArray[inputs.get(0).getInput().length];
+            INDArray[] maskResult = new INDArray[inputs.get(0).getInput().length];
             for (int i = 0; i < result.length; i++) {
                 List<INDArray> examples = new ArrayList<>();
+                List<INDArray> masks = new ArrayList<>();
                 for (int e = 0; e < inputs.size(); e++) {
-                    examples.add(inputs.get(e)[i]);
+                    examples.add(inputs.get(e).getInput()[i]);
+                    if (inputs.get(e).getMask()[i] != null) {
+                        masks.add(inputs.get(e).getMask()[i]);
+                    }
                 }
                 result[i] = Nd4j.pile(examples);
+                if (!masks.isEmpty()) {
+                    maskResult[i] = Nd4j.pile(masks);
+                }
             }
 
             realLocker.writeLock().unlock();
-            return result;
+            return new Batch(result, maskResult);
         } else {
             realLocker.writeLock().unlock();
             return inputs.get(0);

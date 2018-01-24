@@ -11,6 +11,7 @@ import org.deeplearning4j.parallelism.inference.InferenceMode;
 import org.deeplearning4j.parallelism.inference.InferenceObservable;
 import org.deeplearning4j.parallelism.inference.observers.BasicInferenceObservable;
 import org.deeplearning4j.parallelism.inference.observers.BasicInferenceObserver;
+import org.deeplearning4j.parallelism.inference.observers.Batch;
 import org.deeplearning4j.parallelism.inference.observers.BatchedInferenceObservable;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.dataset.DataSet;
@@ -123,44 +124,84 @@ public class ParallelInference {
     }
 
     /**
-     *
-     * @param input
-     * @return
-     */
-    public INDArray[] output(INDArray... input) {
-        // basically, depending on model type we either throw stuff to specific model, or wait for batch
+    *
+    * @param input
+    * @return
+    */
+   public INDArray[] output(INDArray... input) {
+       // basically, depending on model type we either throw stuff to specific model, or wait for batch
 
-        BasicInferenceObserver observer = new BasicInferenceObserver();
-        InferenceObservable observable;
+       BasicInferenceObserver observer = new BasicInferenceObserver();
+       InferenceObservable observable;
 
-        if (inferenceMode == InferenceMode.SEQUENTIAL) {
-            observable = new BasicInferenceObservable(input);
-            observable.addObserver(observer);
-            try {
-                observables.put(observable);
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            }
-        } else {
-            observable = provider.setInput(observer, input);
-        }
-
-
-
-        try {
-            // submit query to processing
+       if (inferenceMode == InferenceMode.SEQUENTIAL) {
+           observable = new BasicInferenceObservable(input);
+           observable.addObserver(observer);
+           try {
+               observables.put(observable);
+           } catch (InterruptedException e) {
+               throw new RuntimeException(e);
+           }
+       } else {
+           observable = provider.setInput(observer, input);
+       }
 
 
-            // and block until Observable returns
-            //observer.wait();
 
-            observer.waitTillDone();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+       try {
+           // submit query to processing
 
-        return observable.getOutput();
-    }
+
+           // and block until Observable returns
+           //observer.wait();
+
+           observer.waitTillDone();
+       } catch (Exception e) {
+           throw new RuntimeException(e);
+       }
+
+       return observable.getOutput();
+   }
+   
+   /**
+   *
+   * @param input
+   * @return
+   */
+  public INDArray[] output(INDArray[] input, INDArray[] mask) {
+      // basically, depending on model type we either throw stuff to specific model, or wait for batch
+
+      BasicInferenceObserver observer = new BasicInferenceObserver();
+      InferenceObservable observable;
+
+      if (inferenceMode == InferenceMode.SEQUENTIAL) {
+          observable = new BasicInferenceObservable(input);
+          observable.addObserver(observer);
+          try {
+              observables.put(observable);
+          } catch (InterruptedException e) {
+              throw new RuntimeException(e);
+          }
+      } else {
+          observable = provider.setInput(observer, input, mask);
+      }
+
+
+
+      try {
+          // submit query to processing
+
+
+          // and block until Observable returns
+          //observer.wait();
+
+          observer.waitTillDone();
+      } catch (Exception e) {
+          throw new RuntimeException(e);
+      }
+
+      return observable.getOutput();
+  }
 
 
     public static class Builder {
@@ -331,10 +372,15 @@ public class ParallelInference {
 
                         // FIXME: get rid of instanceof here, model won't change during runtime anyway
                         if (replicatedModel instanceof ComputationGraph) {
-                            INDArray[] output = ((ComputationGraph) replicatedModel).output(false, request.getInput());
+                            Batch batch = request.getInput();
+                            
+                            ((ComputationGraph) replicatedModel).setLayerMaskArrays(batch.getMask(), null);
+                            INDArray[] output = ((ComputationGraph) replicatedModel).output(false, batch.getInput());
                             request.setOutput(output);
                         } else if (replicatedModel instanceof MultiLayerNetwork) {
-                            INDArray output = ((MultiLayerNetwork) replicatedModel).output(request.getInput()[0]);
+                            Batch batch = request.getInput();
+                            ((MultiLayerNetwork) replicatedModel).setLayerMaskArrays(batch.getMask()[0], null);
+                            INDArray output = ((MultiLayerNetwork) replicatedModel).output(request.getInput().getInput()[0]);
                             request.setOutput(output);
                         }
 
@@ -385,6 +431,29 @@ public class ParallelInference {
                 }
 
                 currentObservable.setInput(input);
+                currentObservable.addObserver(observer);
+
+                try {
+                    if (isNew)
+                        targetQueue.put(currentObservable);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+
+                return currentObservable;
+            }
+        }
+        
+        protected InferenceObservable setInput(@NonNull Observer observer, INDArray[] input, INDArray[] mask) {
+            synchronized (locker) {
+                boolean isNew = false;
+                if (currentObservable == null || currentObservable.getCounter() >= batchLimit
+                                || currentObservable.isLocked()) {
+                    isNew = true;
+                    currentObservable = new BatchedInferenceObservable();
+                }
+
+                currentObservable.setInput(input, mask);
                 currentObservable.addObserver(observer);
 
                 try {

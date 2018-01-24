@@ -12,8 +12,7 @@ import java.util.Observable;
  */
 @Slf4j
 public class BasicInferenceObservable extends Observable implements InferenceObservable {
-    @Getter
-    private INDArray[] input;
+    Batch input;
     @Getter
     private long id;
     @Getter
@@ -22,12 +21,17 @@ public class BasicInferenceObservable extends Observable implements InferenceObs
 
     public BasicInferenceObservable(INDArray... inputs) {
         super();
-        this.input = inputs;
+        this.input = new Batch(inputs, null);
     }
 
     @Override
     public void setInput(INDArray... input) {
-        this.input = input;
+        setInput(input, null);
+    }
+    
+    @Override
+    public void setInput(INDArray[] input, INDArray[] masks) {
+        this.input = new Batch(input, masks);
     }
 
     public void setOutput(INDArray... output) {
@@ -35,4 +39,11 @@ public class BasicInferenceObservable extends Observable implements InferenceObs
         this.setChanged();
         notifyObservers();
     }
+
+    @Override
+    public Batch getInput() {
+        return input;
+    }
+
+    
 }

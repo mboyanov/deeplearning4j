@@ -166,7 +166,7 @@ public class ParallelInferenceTest {
 
         assertTrue(observable1 == observable2);
 
-        INDArray[] input = observable1.getInput();
+        INDArray[] input = observable1.getInput().getInput();
 
         assertEquals(1, input.length);
         assertArrayEquals(new int[] {2, 100}, input[0].shape());
@@ -192,12 +192,12 @@ public class ParallelInferenceTest {
         assertTrue(observable1 == observable2);
         assertTrue(observable1 != observable3);
 
-        INDArray[] input = observable1.getInput();
+        INDArray[] input = observable1.getInput().getInput();
 
         assertEquals(1.0f, input[0].tensorAlongDimension(0, 1).meanNumber().floatValue(), 0.001);
         assertEquals(2.0f, input[0].tensorAlongDimension(1, 1).meanNumber().floatValue(), 0.001);
 
-        input = observable3.getInput();
+        input = observable3.getInput().getInput();
         assertEquals(3.0f, input[0].tensorAlongDimension(0, 1).meanNumber().floatValue(), 0.001);
     }
 

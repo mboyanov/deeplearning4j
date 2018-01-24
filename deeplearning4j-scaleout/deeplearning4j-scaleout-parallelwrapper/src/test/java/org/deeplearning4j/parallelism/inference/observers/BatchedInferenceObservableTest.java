@@ -32,9 +32,9 @@ public class BatchedInferenceObservableTest {
             observable.setInput(Nd4j.create(100).assign(i));
         }
 
-        assertEquals(1, observable.getInput().length);
+        assertEquals(1, observable.getInput().getInput().length);
 
-        INDArray array = observable.getInput()[0];
+        INDArray array = observable.getInput().getInput()[0];
         assertEquals(2, array.rank());
 
         log.info("Array shape: {}", Arrays.toString(array.shapeInfoDataBuffer().asInt()));
@@ -53,9 +53,9 @@ public class BatchedInferenceObservableTest {
             observable.setInput(Nd4j.create(3, 72, 72).assign(i));
         }
 
-        assertEquals(1, observable.getInput().length);
+        assertEquals(1, observable.getInput().getInput().length);
 
-        INDArray array = observable.getInput()[0];
+        INDArray array = observable.getInput().getInput()[0];
         assertEquals(4, array.rank());
         assertEquals(32, array.shape()[0]);
 
@@ -74,9 +74,9 @@ public class BatchedInferenceObservableTest {
             observable.setInput(Nd4j.create(3, 72, 72).assign(i), Nd4j.create(100, 100).assign(100 + i));
         }
 
-        assertEquals(2, observable.getInput().length);
+        assertEquals(2, observable.getInput().getInput().length);
 
-        INDArray[] inputs = observable.getInput();
+        INDArray[] inputs = observable.getInput().getInput();
 
         INDArray features0 = inputs[0];
         INDArray features1 = inputs[1];
